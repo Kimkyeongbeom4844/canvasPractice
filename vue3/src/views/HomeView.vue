@@ -3,8 +3,14 @@ import { ref } from 'vue';
 import Psd from '@webtoon/psd';
 
 const canvasRef = ref(null);
+const konvaStageRef = ref(null);
+const konvaLayerRef = ref(null);
 const konvaStage = ref({ width: null, height: null });
 const konvaImage = ref(null);
+const konvaLineColor = ref('black');
+const konvaLineWidth = ref(5);
+const konvaLineComposite = ref('source-over');
+const konvaLineArr = ref([]);
 
 const onInputFileChange = async (e) => {
   const imgRegExp = /.(jpeg|png)$/i;
@@ -38,14 +44,74 @@ const onInputFileChange = async (e) => {
     }
   }
 };
+
+let isPress = false;
+let isMove = false;
+const onStageMouseDown = () => {
+  isPress = true;
+  isMove = false;
+  const { x, y } = konvaStageRef.value.getNode().getPointerPosition();
+  konvaLineArr.value.push({
+    points: [x, y],
+    stroke: konvaLineColor.value,
+    strokeWidth: konvaLineWidth.value,
+    globalCompositeOperation: konvaLineComposite.value
+  });
+};
+const onStageMouseMove = () => {
+  if (isPress) {
+    isMove = true;
+    const { x, y } = konvaStageRef.value.getNode().getPointerPosition();
+    konvaLineArr.value[konvaLineArr.value.length - 1] = {
+      points: [...konvaLineArr.value[konvaLineArr.value.length - 1].points, x, y],
+      stroke: konvaLineColor.value,
+      strokeWidth: konvaLineWidth.value,
+      globalCompositeOperation: konvaLineComposite.value
+    };
+  }
+};
+const onStageMouseUp = () => {
+  isPress = false;
+  if (isMove === false) konvaLineArr.value.pop();
+  isMove = false;
+};
+const onStageMouseLeave = () => {
+  isPress = false;
+};
+const onClickDrawButton = () => {
+  konvaLineComposite.value = 'source-over';
+};
+const onClickEraserButton = () => {
+  konvaLineComposite.value = 'destination-out';
+};
 </script>
 <template>
   <div id="wrap">
     <input type="file" @change="onInputFileChange" />
+    <button @click="onClickDrawButton">드로잉</button>
+    <button @click="onClickEraserButton">지우개</button>
     <canvas class="tempCanvas" ref="canvasRef" />
-    <v-stage :config="konvaStage">
+    <v-stage
+      @mousemove="onStageMouseMove"
+      @mouseup="onStageMouseUp"
+      @mousedown="onStageMouseDown"
+      @mouseleave="onStageMouseLeave"
+      ref="konvaStageRef"
+      :config="konvaStage"
+    >
       <v-layer>
         <v-image :config="{ image: konvaImage }" />
+      </v-layer>
+      <v-layer ref="konvaLayerRef">
+        <v-line
+          v-for="v in konvaLineArr"
+          :config="{
+            points: v.points,
+            stroke: v.stroke,
+            strokeWidth: v.strokeWidth,
+            globalCompositeOperation: v.globalCompositeOperation
+          }"
+        />
       </v-layer>
     </v-stage>
   </div>
