@@ -3,7 +3,9 @@ import { ref } from 'vue';
 import Psd from '@webtoon/psd';
 
 const canvasRef = ref(null);
-const layerArr = ref([]);
+const konvaStage = ref({ width: null, height: null });
+const konvaImage = ref(null);
+
 const onInputFileChange = async (e) => {
   const imgRegExp = /.(jpeg|png)$/i;
   const file = e.currentTarget.files[0];
@@ -13,25 +15,23 @@ const onInputFileChange = async (e) => {
   } else {
     if (/.psd$/.test(file.name)) {
       //psd
-      const result = await file.arrayBuffer();
-      const psdFile = Psd.parse(result);
-      for (let i = 0; i < psdFile.layers.length; i++) {
-        layerArr.value.push({
-          width: psdFile.layers[i].width,
-          height: psdFile.layers[i].height,
-          name: psdFile.layers[i].layerFrame.layerProperties.name
-        });
-        const compositeBuffer = await psdFile.layers[i].composite();
-        const imageData = new ImageData(
-          compositeBuffer,
-          psdFile.layers[i].width,
-          psdFile.layers[i].height
-        );
-        const context = canvasRef.value[i].getContext('2d');
-        canvasRef.value[i].width = psdFile.layers[i].width;
-        canvasRef.value[i].height = psdFile.layers[i].height;
-        context.putImageData(imageData, 0, 0);
-      }
+      const psdFile = Psd.parse(await file.arrayBuffer());
+      const context = canvasRef.value.getContext('2d');
+      const compositeBuffer = await psdFile.composite();
+      const imageData = new ImageData(compositeBuffer, psdFile.width, psdFile.height);
+      canvasRef.value.width = psdFile.width;
+      canvasRef.value.height = psdFile.height;
+      context.putImageData(imageData, 0, 0);
+      const image = new Image();
+      image.onload = () => {
+        const width = 500;
+        image.width = width;
+        image.height = width * (image.naturalHeight / image.naturalWidth);
+        konvaStage.value.width = image.width;
+        konvaStage.value.height = image.height;
+        konvaImage.value = image;
+      };
+      image.src = canvasRef.value.toDataURL('image/jpeg');
     } else {
       alert('파일 업로드 형식은 jpeg, png, psd만 가능합니다');
       e.currentTarget.value = null;
@@ -42,9 +42,13 @@ const onInputFileChange = async (e) => {
 <template>
   <div id="wrap">
     <input type="file" @change="onInputFileChange" />
-    <div v-for="(v, i) of layerArr">
-      <h4>{{ v.name }}</h4>
-      <canvas ref="canvasRef" />
+    <canvas class="tempCanvas" ref="canvasRef" />
+    <div class="konvaWrap">
+      <v-stage :config="konvaStage">
+        <v-layer>
+          <v-image :config="{ image: konvaImage }" />
+        </v-layer>
+      </v-stage>
     </div>
   </div>
 </template>
@@ -52,5 +56,12 @@ const onInputFileChange = async (e) => {
 #wrap {
   display: flex;
   flex-direction: column;
+}
+.tempCanvas {
+  display: none;
+}
+.konvaWrap {
+  display: flex;
+  justify-content: center;
 }
 </style>
