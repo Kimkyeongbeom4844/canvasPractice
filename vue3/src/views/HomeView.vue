@@ -4,13 +4,13 @@ import Psd from '@webtoon/psd';
 
 const canvasRef = ref(null);
 const konvaStageRef = ref(null);
-const konvaLayerRef = ref(null);
-const konvaStage = ref({ width: null, height: null });
+const konvaStage = ref(null);
 const konvaImage = ref(null);
-const konvaLineColor = ref('black');
-const konvaLineWidth = ref(5);
-const konvaLineComposite = ref('source-over');
-const konvaLineArr = ref([]);
+const konvaLineArr = ref([]); //선 배열
+const konvaLineColor = ref('#000000'); // 선 색상
+const konvaLineWidth = ref(5); // 선 굵기
+const konvaLineComposite = ref('source-over'); // 그리기 모드
+const konvaTransformerRef = ref(null);
 
 const onInputFileChange = async (e) => {
   const imgRegExp = /.(jpeg|png)$/i;
@@ -30,11 +30,10 @@ const onInputFileChange = async (e) => {
       context.putImageData(imageData, 0, 0);
       const image = new Image();
       image.onload = () => {
-        const canvasWidth = 500;
+        const canvasWidth = 690; //네이버는 width 690px
         image.width = canvasWidth;
         image.height = canvasWidth * (image.naturalHeight / image.naturalWidth);
-        konvaStage.value.width = image.width;
-        konvaStage.value.height = image.height;
+        konvaStage.value = { width: image.width, height: image.height };
         konvaImage.value = image;
       };
       image.src = canvasRef.value.toDataURL('image/jpeg');
@@ -46,10 +45,20 @@ const onInputFileChange = async (e) => {
 };
 
 let isPress = false;
-let isMove = false;
-const onStageMouseDown = () => {
-  isPress = true;
-  isMove = false;
+const onStageMouseDown = (e) => {
+  // console.log(e.target, Object.getPrototypeOf(e.target).className);
+  if (Object.getPrototypeOf(e.target).className == 'Text') {
+    konvaTransformerRef.value.getNode().nodes([e.target.getParent()]);
+    return;
+  } else {
+    if (e.target.attrs.name?.includes('_anchor'))
+      isPress = false; //mousedown의 target이 transformer의 꼭짓점일때
+    else {
+      konvaTransformerRef.value.getNode().nodes([]);
+      isPress = true;
+      console.log(konvaStageRef.value.getNode());
+    }
+  }
   const { x, y } = konvaStageRef.value.getNode().getPointerPosition();
   konvaLineArr.value.push({
     points: [x, y],
@@ -60,7 +69,6 @@ const onStageMouseDown = () => {
 };
 const onStageMouseMove = () => {
   if (isPress) {
-    isMove = true;
     const { x, y } = konvaStageRef.value.getNode().getPointerPosition();
     konvaLineArr.value[konvaLineArr.value.length - 1] = {
       points: [...konvaLineArr.value[konvaLineArr.value.length - 1].points, x, y],
@@ -72,8 +80,8 @@ const onStageMouseMove = () => {
 };
 const onStageMouseUp = () => {
   isPress = false;
-  if (isMove === false) konvaLineArr.value.pop();
-  isMove = false;
+  if (konvaLineArr.value[konvaLineArr.value.length - 1]?.points.length === 2)
+    konvaLineArr.value.pop();
 };
 const onStageMouseLeave = () => {
   isPress = false;
@@ -84,14 +92,27 @@ const onClickDrawButton = () => {
 const onClickEraserButton = () => {
   konvaLineComposite.value = 'destination-out';
 };
+const onClickPopButton = () => {
+  konvaLineArr.value.pop();
+};
+const onDragStart = (e) => {
+  e.dataTransfer.dropEffect = 'copy';
+};
+const onDragEnd = (e) => {
+  console.log(konvaStageRef.value.getNode().getPointerPosition());
+};
 </script>
 <template>
   <div id="wrap">
+    <div @dragstart="onDragStart" @dragend="onDragEnd">123</div>
     <input type="file" @change="onInputFileChange" />
+    <input v-model="konvaLineColor" type="color" />
     <button @click="onClickDrawButton">드로잉</button>
     <button @click="onClickEraserButton">지우개</button>
+    <button @click="onClickPopButton">뒤로가기</button>
     <canvas class="tempCanvas" ref="canvasRef" />
     <v-stage
+      v-if="konvaStage"
       @mousemove="onStageMouseMove"
       @mouseup="onStageMouseUp"
       @mousedown="onStageMouseDown"
@@ -102,7 +123,17 @@ const onClickEraserButton = () => {
       <v-layer>
         <v-image :config="{ image: konvaImage }" />
       </v-layer>
-      <v-layer ref="konvaLayerRef">
+      <v-layer>
+        <v-line
+          :config="{
+            points: [100, 100, 200, 200],
+            stroke: 'red',
+            strokeWidth: 5,
+            globalCompositeOperation: 'source-over'
+          }"
+        />
+      </v-layer>
+      <v-layer>
         <v-line
           v-for="v in konvaLineArr"
           :config="{
@@ -112,6 +143,33 @@ const onClickEraserButton = () => {
             globalCompositeOperation: v.globalCompositeOperation
           }"
         />
+        <v-label :config="{ x: 100, y: 100, draggable: true }">
+          <v-tag
+            :config="{
+              fill: 'white',
+              stroke: 'black',
+              strokeWidth: 2,
+              pointerDirection: 'down',
+              pointerWidth: 10,
+              pointerHeight: 10
+              // shadowColor: 'black'
+              // shadowBlur: 10,
+              // shadowOffsetX: 10,
+              // shadowOffsetY: 10,
+              // shadowOpacity: 0.5
+            }"
+          ></v-tag>
+          <v-text
+            :config="{
+              text: `안녕하세요.
+개발팀입니다
+개발`,
+              fontSize: 14,
+              padding: 8
+            }"
+          />
+        </v-label>
+        <v-transformer ref="konvaTransformerRef" />
       </v-layer>
     </v-stage>
   </div>
